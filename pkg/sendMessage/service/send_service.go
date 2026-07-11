@@ -1622,7 +1622,21 @@ func (s *sendService) SendPollVote(data *PollVoteStruct, instance *instance_mode
 		return nil, fmt.Errorf("failed to build poll vote: %w", err)
 	}
 
-	return s.SendMessage(instance, voteMsg, "PollUpdateMessage", &SendDataStruct{Number: data.Number})
+	// envia DIRETO pelo client (o helper s.SendMessage não conhece "PollUpdateMessage" e o switch acessaria msg.XxxMessage nil)
+	resp, err := client.SendMessage(context.Background(), chatJID, voteMsg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send poll vote: %w", err)
+	}
+	return &MessageSendStruct{
+		Info: types.MessageInfo{
+			MessageSource: types.MessageSource{Chat: chatJID, Sender: *client.Store.ID, IsFromMe: true, IsGroup: chatJID.Server == types.GroupServer},
+			ID:        resp.ID,
+			Timestamp: resp.Timestamp,
+			ServerID:  resp.ServerID,
+			Type:      "PollUpdateMessage",
+		},
+		Message: voteMsg,
+	}, nil
 }
 
 func convertToWebP(imageData string) ([]byte, error) {
