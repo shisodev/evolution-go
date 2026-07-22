@@ -1947,7 +1947,7 @@ func (s *sendService) SendButton(data *ButtonStruct, instance *instance_model.In
 			TemplateMessage: &waE2E.TemplateMessage{
 				HydratedTemplate: &waE2E.TemplateMessage_HydratedFourRowTemplate{
 					Title: &waE2E.TemplateMessage_HydratedFourRowTemplate_HydratedTitleText{
-						HydratedTitleText: proto.String(data.Title),
+						HydratedTitleText: data.Title,
 					},
 					HydratedContentText: proto.String(data.Description),
 					HydratedFooterText:  proto.String(data.Footer),
