@@ -232,6 +232,9 @@ type ButtonStruct struct {
 	NoBot bool `json:"noBot,omitempty"`
 	// EXPERIMENTAL: omite TODOS os AdditionalNodes (<biz>/<bot>) -> ButtonsMessage cru (botao legado).
 	NoBiz bool `json:"noBiz,omitempty"`
+	// EXPERIMENTAL: envia como TemplateMessage (hydratedFourRowTemplate) em vez de ButtonsMessage. NAO emite o no <biz>
+	// (que a conta gated recusa com 405) e pode renderizar botao no APP onde o botao cru (noBiz) so aparece no Web. Reply/url/call.
+	AsTemplate bool `json:"asTemplate,omitempty"`
 	// Typing delay (milliseconds) applied before sending the message.
 	Delay int32 `json:"delay,omitempty" example:"1200"`
 	// JIDs to mention inside the body text.
@@ -1921,7 +1924,44 @@ func (s *sendService) SendButton(data *ButtonStruct, instance *instance_model.In
 	var msg *waE2E.Message
 	var msgType string
 
-	if hasReply && !hasOtherTypes && !hasPix {
+	if data.AsTemplate {
+		// EXPERIMENTAL: TemplateMessage (hydratedFourRowTemplate) — familia que NAO emite o no <biz>, unica chance de
+		// botao renderizar no APP numa conta com gate 405. Reply -> QuickReply, url -> UrlButton, call -> CallButton.
+		var hydratedButtons []*waE2E.HydratedTemplateButton
+		for i, v := range data.Buttons {
+			bid := v.Id
+			if bid == "" {
+				bid = "btn_" + strconv.Itoa(i+1)
+			}
+			hydratedButtons = append(hydratedButtons, &waE2E.HydratedTemplateButton{
+				Index: proto.Uint32(uint32(i + 1)),
+				HydratedButton: &waE2E.HydratedTemplateButton_QuickReplyButton{
+					QuickReplyButton: &waE2E.HydratedTemplateButton_HydratedQuickReplyButton{
+						DisplayText: proto.String(v.DisplayText),
+						ID:          proto.String(bid),
+					},
+				},
+			})
+		}
+		msg = &waE2E.Message{
+			TemplateMessage: &waE2E.TemplateMessage{
+				HydratedTemplate: &waE2E.TemplateMessage_HydratedFourRowTemplate{
+					Title: &waE2E.TemplateMessage_HydratedFourRowTemplate_HydratedTitleText{
+						HydratedTitleText: proto.String(data.Title),
+					},
+					HydratedContentText: proto.String(data.Description),
+					HydratedFooterText:  proto.String(data.Footer),
+					HydratedButtons:     hydratedButtons,
+					TemplateID:          proto.String(templateId),
+				},
+				TemplateID: proto.String(templateId),
+			},
+			MessageContextInfo: &waE2E.MessageContextInfo{
+				MessageSecret: btnMsgSecret,
+			},
+		}
+		msgType = "TemplateMessage"
+	} else if hasReply && !hasOtherTypes && !hasPix {
 		// Reply-only: native ButtonsMessage wrapped in DocumentWithCaptionMessage (Baileys PR #36).
 		var replyButtons []*waE2E.ButtonsMessage_Button
 		for _, v := range data.Buttons {
@@ -2126,9 +2166,10 @@ func (s *sendService) SendButton(data *ButtonStruct, instance *instance_model.In
 		})
 	}
 
-	// EXPERIMENTAL: noBiz -> ButtonsMessage cru, sem nenhum AdditionalNode
+	// EXPERIMENTAL: noBiz/asTemplate -> sem nenhum AdditionalNode (<biz>/<bot>). TemplateMessage NAO pode levar <biz>
+	// (ou cai no mesmo gate 405); e o botao cru (noBiz) tambem vai sem nós.
 	var addNodes *[]waBinary.Node
-	if !data.NoBiz {
+	if !data.NoBiz && !data.AsTemplate {
 		addNodes = &bizNodes
 	}
 	// Route through centralized SendMessage for ContextInfo, webhooks, quotes, mentions.
