@@ -1278,6 +1278,17 @@ func (mycli *MyClient) myEventHandler(rawEvt interface{}) {
 			}
 
 			decrypted, err := mycli.clientPointer[mycli.userID].DecryptPollVote(context.Background(), evt)
+			if err != nil && !evt.Info.SenderAlt.IsEmpty() {
+				// LID: o JID swap (Sender=numero real) roda ANTES daqui, mas o WhatsApp cifra o voto com a
+				// identidade ORIGINAL (@lid) -> AAD nao bate -> "message authentication failed".
+				// Retry com Sender/SenderAlt restaurados (identidade original) resolve o voto em chat LID.
+				evtAlt := *evt
+				evtAlt.Info.Sender, evtAlt.Info.SenderAlt = evt.Info.SenderAlt, evt.Info.Sender
+				if d2, err2 := mycli.clientPointer[mycli.userID].DecryptPollVote(context.Background(), &evtAlt); err2 == nil {
+					mycli.loggerWrapper.GetLogger(mycli.userID).LogInfo("[%s] Poll vote decrypted via SenderAlt (LID retry)", mycli.userID)
+					decrypted, err = d2, nil
+				}
+			}
 			if err != nil {
 				mycli.loggerWrapper.GetLogger(mycli.userID).LogError("[%s] Failed to decrypt vote: %v", mycli.userID, err)
 			} else {
