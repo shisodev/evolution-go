@@ -228,6 +228,10 @@ type ButtonStruct struct {
 	Footer string `json:"footer" example:"Evolution GO"`
 	// Buttons array. See combination rules on the parent type description.
 	Buttons []Button `json:"buttons"`
+	// EXPERIMENTAL: omite o no <bot biz_bot="1"/> da stanza (algumas contas recusam com 405 por causa dele).
+	NoBot bool `json:"noBot,omitempty"`
+	// EXPERIMENTAL: omite TODOS os AdditionalNodes (<biz>/<bot>) -> ButtonsMessage cru (botao legado).
+	NoBiz bool `json:"noBiz,omitempty"`
 	// Typing delay (milliseconds) applied before sending the message.
 	Delay int32 `json:"delay,omitempty" example:"1200"`
 	// JIDs to mention inside the body text.
@@ -2115,13 +2119,18 @@ func (s *sendService) SendButton(data *ButtonStruct, instance *instance_model.In
 			Content: []waBinary.Node{bizInteractiveContent},
 		},
 	}
-	if !strings.Contains(data.Number, "@g.us") {
+	if !strings.Contains(data.Number, "@g.us") && !data.NoBot {
 		bizNodes = append(bizNodes, waBinary.Node{
 			Tag:   "bot",
 			Attrs: waBinary.Attrs{"biz_bot": "1"},
 		})
 	}
 
+	// EXPERIMENTAL: noBiz -> ButtonsMessage cru, sem nenhum AdditionalNode
+	var addNodes *[]waBinary.Node
+	if !data.NoBiz {
+		addNodes = &bizNodes
+	}
 	// Route through centralized SendMessage for ContextInfo, webhooks, quotes, mentions.
 	message, err := s.SendMessage(instance, msg, msgType, &SendDataStruct{
 		Number:          data.Number,
@@ -2130,7 +2139,7 @@ func (s *sendService) SendButton(data *ButtonStruct, instance *instance_model.In
 		MentionedJID:    data.MentionedJID,
 		FormatJid:       data.FormatJid,
 		Quoted:          data.Quoted,
-		AdditionalNodes: &bizNodes,
+		AdditionalNodes: addNodes,
 	})
 	if err != nil {
 		s.loggerWrapper.GetLogger(instance.Id).LogError("[%s] Error sending button message: %v", instance.Id, err)
