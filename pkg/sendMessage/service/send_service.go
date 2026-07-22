@@ -2622,6 +2622,8 @@ func (s *sendService) SendMessage(instance *instance_model.Instance, msg *waE2E.
 					QuotedMessage: &waE2E.Message{Conversation: proto.String("")},
 				}
 			}
+		case "TemplateMessage":
+			// TemplateMessage (hydrated): quote não aplicado (experimental)
 		default:
 			return nil, fmt.Errorf("invalid messageType: %s", messageType)
 		}
@@ -2662,6 +2664,8 @@ func (s *sendService) SendMessage(instance *instance_model.Instance, msg *waE2E.
 			// ContextInfo already set in SendList
 		case "ButtonsMessage":
 			// Reply-only buttons: ContextInfo already set in SendButton
+		case "TemplateMessage":
+			// TemplateMessage (hydrated): sem ContextInfo extra
 		default:
 			return nil, fmt.Errorf("invalid messageType: %s", messageType)
 		}
